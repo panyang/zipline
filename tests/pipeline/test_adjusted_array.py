@@ -29,6 +29,7 @@ from zipline.utils.numpy_utils import (
     default_missing_value_for_dtype,
     float64_dtype,
     int64_dtype,
+    string_dtype,
 )
 
 
@@ -318,7 +319,7 @@ class AdjustedArrayTestCase(TestCase):
                 assert_array_equal(yielded, expected_yield)
 
     @parameter_space(
-        dtype=[float64_dtype, int64_dtype, datetime64ns_dtype],
+        dtype=[float64_dtype, int64_dtype, datetime64ns_dtype, string_dtype],
         missing_value=[0, 10000],
         window_length=[2, 3],
     )

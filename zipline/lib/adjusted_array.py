@@ -44,10 +44,13 @@ INT_DTYPES = frozenset(
 DATETIME_DTYPES = frozenset(
     map(dtype, ['datetime64[ns]', 'datetime64[D]']),
 )
+STRING_DTYPES = frozenset([dtype('S')])
+
 REPRESENTABLE_DTYPES = BOOL_DTYPES.union(
     FLOAT_DTYPES,
     INT_DTYPES,
-    DATETIME_DTYPES
+    DATETIME_DTYPES,
+    STRING_DTYPES,
 )
 
 

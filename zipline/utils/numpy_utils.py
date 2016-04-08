@@ -32,6 +32,8 @@ complex128_dtype = dtype('complex128')
 datetime64D_dtype = dtype('datetime64[D]')
 datetime64ns_dtype = dtype('datetime64[ns]')
 
+string_dtype = dtype('S')
+
 make_datetime64ns = flip(datetime64, 'ns')
 make_datetime64D = flip(datetime64, 'D')
 
