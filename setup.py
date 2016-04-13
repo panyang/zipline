@@ -86,6 +86,7 @@ ext_modules = [
     ),
     Extension('zipline.lib._int64window', ['zipline/lib/_int64window.pyx']),
     Extension('zipline.lib._uint8window', ['zipline/lib/_uint8window.pyx']),
+    Extension('zipline.lib._labelwindow', ['zipline/lib/_labelwindow.pyx']),
     Extension('zipline.lib.rank', ['zipline/lib/rank.pyx']),
     Extension('zipline.data._equities', ['zipline/data/_equities.pyx']),
     Extension('zipline.data._adjustments', ['zipline/data/_adjustments.pyx']),

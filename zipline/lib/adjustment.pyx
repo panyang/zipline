@@ -536,3 +536,60 @@ cdef class Datetime64Overwrite(Datetime64Adjustment):
             # last_row + 1 because last_row should also be affected.
             for row in range(self.first_row, self.last_row + 1):
                 data[row, col] = self.value
+
+
+cdef class StringAdjustment(Adjustment):
+    """
+    Base class for adjustments that operate onst string data.
+    """
+    cdef:
+        readonly str value
+
+    def __init__(self,
+                 Py_ssize_t first_row,
+                 Py_ssize_t last_row,
+                 Py_ssize_t first_col,
+                 Py_ssize_t last_col,
+                 str value):
+        super(Adjustment, self).__init__(
+            first_row=first_row,
+            last_row=last_row,
+            first_col=first_col,
+            last_col=last_col,
+        )
+        self.value = value
+
+    def __repr__(self):
+        return (
+            "%s(first_row=%d, last_row=%d,"
+            " first_col=%d, last_col=%d, value=%r)" % (
+                type(self).__name__,
+                self.first_row,
+                self.last_row,
+                self.first_col,
+                self.last_col,
+                self.value,
+            )
+        )
+
+
+cdef class StringOverwrite(StringAdjustment):
+
+    cpdef mutate(self, object data):
+        # data is an object here because this is intended to be used with a
+        # `zipline.lib.LabelArray`.
+
+        cdef Py_ssize_t row, col
+        cdef str value
+        value = self.value
+
+        # We don't do this in a loop because we only want to look up the string
+        # value in the array's categories once.
+        data[self.first_row:self.last_row + 1,
+             self.first_col:self.last_col + 1] = self.value
+
+        # last_col + 1 because last_col should also be affected.
+        for col in range(self.first_col, self.last_col + 1):
+            # last_row + 1 because last_row should also be affected.
+            for row in range(self.first_row, self.last_row + 1):
+                data[row, col] = value

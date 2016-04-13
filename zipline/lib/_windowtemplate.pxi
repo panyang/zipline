@@ -2,8 +2,8 @@
 Template for AdjustedArray windowed iterators.
 
 This file is intended to be used by inserting it via a Cython include into a
-file that's define a type symbol named `ctype` and string constant named
-`dtype`.
+file that's defined a type symbol named `databuffer` that can be used like a
+2-D numpy array.
 
 See Also
 --------
@@ -13,8 +13,6 @@ zipline.lib._datewindow
 """
 from numpy cimport ndarray
 from numpy import asarray
-
-ctypedef ctype[:, :] databuffer
 
 
 cdef class AdjustedArrayWindow:
@@ -34,7 +32,7 @@ cdef class AdjustedArrayWindow:
     cdef:
         # ctype must be defined by the file into which this is being copied.
         databuffer data
-        object viewtype
+        dict view_kwargs
         readonly Py_ssize_t window_length
         Py_ssize_t anchor, next_anchor, max_anchor, next_adj
         dict adjustments
@@ -43,13 +41,13 @@ cdef class AdjustedArrayWindow:
 
     def __cinit__(self,
                   databuffer data not None,
-                  object viewtype not None,
+                  dict view_kwargs not None,
                   dict adjustments not None,
                   Py_ssize_t offset,
                   Py_ssize_t window_length):
 
         self.data = data
-        self.viewtype = viewtype
+        self.view_kwargs = view_kwargs
         self.adjustments = adjustments
         self.adjustment_indices = sorted(adjustments, reverse=True)
         self.window_length = window_length
@@ -93,7 +91,7 @@ cdef class AdjustedArrayWindow:
             self.next_adj = self.pop_next_adj()
 
         start = anchor - self.window_length
-        out = asarray(self.data[start:self.anchor]).view(self.viewtype)
+        out = asarray(self.data[start:self.anchor]).view(**self.view_kwargs)
         out.setflags(write=False)
 
         self.next_anchor = self.anchor + 1
@@ -102,13 +100,10 @@ cdef class AdjustedArrayWindow:
 
     def seek(self, target_anchor):
         cdef:
-            ndarray out
+            ndarray out = None
 
         if target_anchor < self.anchor:
             raise Exception('Can not access data after window has passed.')
-
-        if target_anchor == self.anchor:
-            return self.last_out
 
         while self.anchor < target_anchor:
             out = next(self)
@@ -122,5 +117,5 @@ cdef class AdjustedArrayWindow:
             self.window_length,
             self.anchor,
             self.max_anchor,
-            self.viewtype,
+            self.view_kwargs.get('dtype'),
         )

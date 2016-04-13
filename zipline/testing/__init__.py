@@ -34,3 +34,4 @@ from .core import (  # noqa
     to_series,
     to_utc,
 )
+from .fixtures import ZiplineTestCase  # noqa

@@ -1,21 +1,41 @@
 """
 An ndarray subclass for working with arrays of strings.
 """
-from itertools import count
 from numbers import Number
+from operator import eq, ne
 
 import numpy as np
 from numpy import ndarray
 from pandas import factorize
-from six import iteritems
 
-from zipline.utils.input_validation import expect_types, optional
+from zipline.utils.preprocess import preprocess
+from zipline.utils.input_validation import coerce, expect_types
 from zipline.utils.numpy_utils import int64_dtype
 
 
 def fast_eq(l, r):
     "Eq check with a short-circuit for identical objects."
-    return l is r or l == r
+    return l is r or (l == r).all()
+
+
+class CategoryMismatch(ValueError):
+    """
+    Error raised on attempt to perform operations between LabelArrays with
+    mismatched category arrays.
+    """
+    def __init__(self, left, right):
+        (mismatches,) = np.where(left != right)
+        assert len(mismatches), "Not actually a mismatch!"
+        super(CategoryMismatch, self).__init__(
+            "LabelArray categories don't match:\n"
+            "Mismatched Indices: {mismatches}\n"
+            "Left: {left}\n"
+            "Right: {right}".format(
+                mismatches=mismatches,
+                left=left[mismatches],
+                right=right[mismatches],
+            )
+        )
 
 
 class LabelArray(ndarray):
@@ -29,79 +49,134 @@ class LabelArray(ndarray):
     --------
     http://docs.scipy.org/doc/numpy-1.10.0/user/basics.subclassing.html
     """
-    @expect_types(values=ndarray)
-    def __new__(cls, values, categories=None):
+    @preprocess(values=coerce(list, np.asarray))
+    @expect_types(values=np.ndarray)
+    def __new__(cls, values):
         dtype = values.dtype
-        if values.dtype != int64_dtype:
-            codes, labels = factorize(values.ravel())
+        if dtype != int64_dtype:
+            codes, categories = factorize(values.ravel(), sort=True)
+            categories.setflags(write=False)
             values = codes.reshape(values.shape)
-            if categories is not None:
-                categories = categories
+        else:
+            raise Exception(':(')
 
         obj = np.asarray(values).view(type=cls)
-        obj.categories = categories
+        obj._categories = categories
+        obj._reverse_categories = (
+            dict(zip(categories, np.arange(len(categories))))
+        )
         return obj
+
+    @property
+    def categories(self):
+        # This is a property because it should be immutable.
+        return self._categories
+
+    @property
+    def reverse_categories(self):
+        # This is a property because it should be immutable.
+        return self._reverse_categories
 
     def __array_finalize__(self, obj):
         """
         Called by Numpy after array construction.
 
-        There are two cases where this can happen:
+        There are three cases where this can happen:
 
-        0. Someone tries to directly construct a new array by doing::
+        1. Someone tries to directly construct a new array by doing::
 
             >>> ndarray.__new__(LabelArray, ...)
 
-           In this case, obj will be None.  We treat this as an error case and fail.
+           In this case, obj will be None.  We treat this as an error case and
+           fail.
 
-        1. Someone (most likely our own __new__) calls
+        2. Someone (most likely our own __new__) calls
            other_array.view(type=LabelArray).
 
            In this case, `self` will be the new LabelArray instance, and
            ``obj` will be the array on which ``view`` is being called.
 
-           The caller of ``obj.view`` is responsible for copying the parent's
-           categories onto self after this function exits.
+           The caller of ``obj.view`` is responsible for copying setting
+           category metadata on ``self`` after we exit.
 
-        2. Some creates a new LabelArray by slicing an existing one.
+        3. Someone creates a new LabelArray by slicing an existing one.
 
            In this case, ``obj`` will be the original LabelArray.  We're
-           responsible for copying over the parent array's categories.
+           responsible for copying over the parent array's category metadata.
         """
         if obj is None:
             raise TypeError(
                 "Direct construction of LabelArrays is not supported."
             )
+        if self.dtype != int64_dtype:
+            raise TypeError("Can't coerce LabelArrays to other dtypes.")
 
-        self.categories = getattr(obj, 'categories', None)
+        # See docstring for an explanation of when these will or will not be
+        # set.
+        self._categories = getattr(obj, 'categories', None)
+        self._reverse_categories = getattr(obj, 'reverse_categories', None)
 
-    @property
-    def seirogetac(self):
-        "The reverse of self.categories."
-        return {v: k for k, v in iteritems(self.categories)}
+    def as_int_array(self):
+        """
+        Convert self into a regular ndarray of ints.
+
+        This is an O(1) operation, and does not copy the underlying data.
+        """
+        return self.view(type=ndarray)
 
     def as_string_array(self):
         """
         Convert self back into an array of strings.
         """
-        lookup = self.seirogetac
-        inverted_categories = {v: k for k, v in iteritems(self.categories)}
+        return self.categories[self]
 
-    def __eq__(self, other):
+    def __setitem__(self, indexer, value):
         self_categories = self.categories
-        if isinstance(other, LabelArray):
-            if fast_eq(self_categories, other.categories):
-                return (self.view(type=ndarray) == other.view(type=ndarray))
+        if isinstance(value, LabelArray):
+            value_categories = value.categories
+            if fast_eq(self_categories, value_categories):
+                return super(LabelArray, self).__setitem__(indexer, value)
             else:
-                return NotImplemented
-        elif isinstance(other, ndarray):
-            return NotImplemented
-        elif isinstance(other, str):
-            return (self.view(type=ndarray) == self_categories.get(other, -1))
-        elif isinstance(other, Number):
-            return NotImplemented
-        return super(LabelArray, self).__eq__(other)
+                raise CategoryMismatch(self_categories, value_categories)
+        elif isinstance(value, str):
+            value_code = self.reverse_categories.get(value, None)
+            if value_code is None:
+                raise ValueError("%r is not in LabelArray categories." % value)
+            return super(LabelArray, self).__setitem__(indexer, value_code)
+        else:
+            raise NotImplementedError(
+                "Setting into a LabelArray with a value of "
+                "type {type} is not yet supported.".format(
+                    type=type(value).__name__,
+                ),
+            )
 
-    # def __repr__(self):
-    #     temp = np.empty_like(self, dtype=object)
-    #     return ndarray.__repr__(
+    def _make_equality_check(op):
+        def method(self, other):
+            self_categories = self.categories
+            if isinstance(other, LabelArray):
+                other_categories = other.categories
+                if fast_eq(self_categories, other_categories):
+                    return op(self.as_int_array(), other.as_int_array())
+                else:
+                    raise CategoryMismatch(self_categories, other_categories)
+            elif isinstance(other, ndarray):
+                return op(self.as_string_array(), other)
+            elif isinstance(other, str):
+                return op(self_categories, other)[self]
+            elif isinstance(other, Number):
+                return NotImplemented
+            return super(LabelArray, self).__eq__(other)
+        return method
+
+    __eq__ = _make_equality_check(eq)
+    __ne__ = _make_equality_check(ne)
+    del _make_equality_check
+
+    def __repr__(self):
+        repr_lines = repr(self.as_string_array()).splitlines()
+        repr_lines[0] = repr_lines[0].replace('array(', 'LabelArray(', 1)
+        repr_lines[-1] = repr_lines[-1].rsplit(',', 1)[0] + ')'
+        # The extra spaces here account for the difference in length between
+        # 'array(' and 'LabelArray('.
+        return '\n     '.join(repr_lines)

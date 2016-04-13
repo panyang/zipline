@@ -51,7 +51,7 @@ class RestrictedDTypeMixin(object):
 
         if self.dtype not in self.ALLOWED_DTYPES:
             raise UnsupportedDataType(
-                typename=type(self.__name__),
+                typename=type(self).__name__,
                 dtype=self.dtype,
             )
 

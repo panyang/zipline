@@ -182,8 +182,7 @@ class USEquityHistoryLoader(with_metaclass(ABCMeta)):
                         adjs[end_loc] = [mult]
         return adjs
 
-    def _ensure_sliding_window(
-            self, assets, dts, field):
+    def _ensure_sliding_window(self, assets, dts, field):
         """
         Ensure that there is a Float64Multiply window that can provide data
         for the given parameters.
