@@ -19,6 +19,8 @@ from numpy import (
 from numpy.lib.stride_tricks import as_strided
 from toolz import flip
 
+from zipline.utils.input_validation import expect_types
+
 uint8_dtype = dtype('uint8')
 bool_dtype = dtype('bool')
 
@@ -32,6 +34,7 @@ complex128_dtype = dtype('complex128')
 datetime64D_dtype = dtype('datetime64[D]')
 datetime64ns_dtype = dtype('datetime64[ns]')
 
+object_dtype = dtype('O')
 string_dtype = dtype('S')
 
 make_datetime64ns = flip(datetime64, 'ns')
@@ -73,6 +76,8 @@ def make_kind_check(python_types, numpy_kind):
 is_float = make_kind_check(float, 'f')
 is_int = make_kind_check(int, 'i')
 is_datetime = make_kind_check(datetime, 'M')
+is_string = make_kind_check(str, 'S')
+is_object = make_kind_check(object, 'O')
 
 
 def coerce_to_dtype(dtype, value):

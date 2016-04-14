@@ -104,6 +104,7 @@ class ClassifierTestCase(BasePipelineTestCase):
         )
 
     @parameter_space(
+        __fail_fast=True,
         compval=['a', 'ab', '', 'not in the array'],
         missing=['a', 'ab', '', 'not in the array'],
     )

@@ -47,8 +47,8 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
         return ~self.isnull()
 
     # We explicitly don't support classifier to classifier comparisons, since
-    # the numbers likely don't mean the same thing. This may be relaxed in the
-    # future, but for now we're starting conservatively.
+    # the stored values likely don't mean the same thing. This may be relaxed
+    # in the future, but for now we're starting conservatively.
     @expect_types(other=(Number, str))
     def eq(self, other):
         """
@@ -105,7 +105,7 @@ class Classifier(RestrictedDTypeMixin, ComputableTerm):
         else:
             return ScalarStringCompare(
                 classifier=self,
-                op=operator.eq,
+                op=operator.ne,
                 compval=other,
             )
 

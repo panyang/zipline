@@ -1,6 +1,7 @@
 """
 An ndarray subclass for working with arrays of strings.
 """
+from functools import partial
 from numbers import Number
 from operator import eq, ne
 
@@ -9,8 +10,12 @@ from numpy import ndarray
 from pandas import factorize
 
 from zipline.utils.preprocess import preprocess
-from zipline.utils.input_validation import coerce, expect_types
-from zipline.utils.numpy_utils import int64_dtype
+from zipline.utils.input_validation import coerce, expect_kinds, expect_types
+from zipline.utils.numpy_utils import (
+    is_object,
+    is_string,
+    int64_dtype,
+)
 
 
 def fast_eq(l, r):
@@ -49,23 +54,23 @@ class LabelArray(ndarray):
     --------
     http://docs.scipy.org/doc/numpy-1.10.0/user/basics.subclassing.html
     """
-    @preprocess(values=coerce(list, np.asarray))
+    @preprocess(values=coerce(list, partial(np.asarray, dtype=object)))
     @expect_types(values=np.ndarray)
+    @expect_kinds(values=("S", "O"))
     def __new__(cls, values):
-        dtype = values.dtype
-        if dtype != int64_dtype:
-            codes, categories = factorize(values.ravel(), sort=True)
-            categories.setflags(write=False)
-            values = codes.reshape(values.shape)
-        else:
-            raise Exception(':(')
 
-        obj = np.asarray(values).view(type=cls)
-        obj._categories = categories
-        obj._reverse_categories = (
+        if is_string(values):
+            values = values.astype(object)
+
+        codes, categories = factorize(values.ravel(), sort=True)
+        categories.setflags(write=False)
+
+        ret = codes.reshape(values.shape).view(type=cls)
+        ret._categories = categories
+        ret._reverse_categories = (
             dict(zip(categories, np.arange(len(categories))))
         )
-        return obj
+        return ret
 
     @property
     def categories(self):
@@ -163,7 +168,10 @@ class LabelArray(ndarray):
             elif isinstance(other, ndarray):
                 return op(self.as_string_array(), other)
             elif isinstance(other, str):
-                return op(self_categories, other)[self]
+                i = self._reverse_categories.get(other, -1)
+                if not i:  # Requested string isn't in our categories.
+                    return np.full_like(self, False, dtype=bool)
+                return op(self.as_int_array(), i)
             elif isinstance(other, Number):
                 return NotImplemented
             return super(LabelArray, self).__eq__(other)
