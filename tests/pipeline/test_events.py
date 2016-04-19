@@ -120,18 +120,17 @@ class EventLoaderTestCase(TestCase):
         )
 
     def test_null_in_expected_cols(self):
-        dtx_with_null = dtx[0:-2] + pd.date_range([pd.NaT]) + dtx[-1]
+        dates_with_null = pd.Series(dtx)
+        dates_with_null[2] = pd.NaT
         events_by_sid = {0: pd.DataFrame({ANNOUNCEMENT_FIELD_NAME:
-                                          dtx_with_null,
+                                          dates_with_null,
                                           TS_FIELD_NAME: dtx})}
         loader = EventDataSetLoader(
             dtx,
             events_by_sid,
         )
 
-        expected = pd.DataFrame({ANNOUNCEMENT_FIELD_NAME: dtx[0:-2] +
-                                                          dtx[-1],
-                                 TS_FIELD_NAME: dtx[0:-2] + dtx[-1]})
+        expected = events_by_sid[0].drop(2, axis=0).set_index(TS_FIELD_NAME)
         # Check that index by first given date has been added
         assert_frame_equal(
             loader.events_by_sid[0],
