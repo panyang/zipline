@@ -31,6 +31,7 @@ from numpy cimport (
 )
 from numpy.math cimport NAN
 
+ctypedef object carray_t
 ctypedef object ctable_t
 ctypedef object Timestamp_t
 ctypedef object DatetimeIndex_t
@@ -134,7 +135,8 @@ cpdef _read_bcolz_data(ctable_t table,
                        list columns,
                        intp_t[:] first_rows,
                        intp_t[:] last_rows,
-                       intp_t[:] offsets):
+                       intp_t[:] offsets,
+                       read_all):
     """
     Load raw bcolz data for the given columns and indices.
 
@@ -151,6 +153,8 @@ cpdef _read_bcolz_data(ctable_t table,
     last_rows : ndarray[intp]
     offsets : ndarray[intp
         Arrays in the format returned by _compute_row_slices.
+    read_all : bool
+        Whether to read_all sid data at once, or to read per sid.
 
     Returns
     -------
@@ -160,6 +164,7 @@ cpdef _read_bcolz_data(ctable_t table,
     cdef:
         int nassets
         str column_name
+        carray_t carray
         ndarray[dtype=uint32_t, ndim=1] raw_data
         ndarray[dtype=uint32_t, ndim=2] outbuf
         ndarray[dtype=uint8_t, ndim=2, cast=True] where_nan
@@ -170,6 +175,8 @@ cpdef _read_bcolz_data(ctable_t table,
         intp_t first_row
         intp_t last_row
         intp_t offset
+        intp_t out_start
+        intp_t out_end
         list results = []
 
     nassets = shape[1]
@@ -177,15 +184,32 @@ cpdef _read_bcolz_data(ctable_t table,
         raise ValueError("Incompatible index arrays.")
 
     for column_name in columns:
-        raw_data = table[column_name][:]
         outbuf = zeros(shape=shape, dtype=uint32)
-        for asset in range(nassets):
-            first_row = first_rows[asset]
-            last_row = last_rows[asset]
-            offset = offsets[asset]
-            for out_idx, raw_idx in enumerate(range(first_row, last_row + 1)):
-                outbuf[out_idx + offset, asset] = raw_data[raw_idx]
+        if read_all:
+            raw_data = table[column_name][:]
 
+            for asset in range(nassets):
+                first_row = first_rows[asset]
+                last_row = last_rows[asset]
+                offset = offsets[asset]
+                for out_idx, raw_idx in enumerate(
+                        range(first_row, last_row + 1)):
+                    outbuf[out_idx + offset, asset] = raw_data[raw_idx]
+        else:
+            carray = table[column_name]
+
+            for asset in range(nassets):
+                first_row = first_rows[asset]
+                last_row = last_rows[asset]
+                offset = offsets[asset]
+                out_start = first_row + offset
+                out_end = last_row + offset
+                if first_row < last_row:
+                    outbuf[offset:last_row - first_row + offset, asset] = \
+                        carray[first_row:last_row]
+                else:
+                    continue
+                    
         if column_name in {'open', 'high', 'low', 'close'}:
             where_nan = (outbuf == 0)
             outbuf_as_float = outbuf.astype(float64) * .001

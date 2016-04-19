@@ -438,7 +438,7 @@ class BcolzDailyBarReader(DailyBarReader):
     range of queried dates.
     """
     @preprocess(table=coerce_string(open_ctable, mode='r'))
-    def __init__(self, table):
+    def __init__(self, table, read_all_threshold=100):
 
         self._table = table
         # Cache of fully read np.array for the carrays in the daily bar table.
@@ -447,6 +447,7 @@ class BcolzDailyBarReader(DailyBarReader):
         # process first.
         self._spot_cols = {}
         self.PRICE_ADJUSTMENT_FACTOR = 0.001
+        self._read_all_threshold = read_all_threshold
 
     @lazyval
     def _calendar(self):
@@ -545,6 +546,7 @@ class BcolzDailyBarReader(DailyBarReader):
             end_idx,
             assets,
         )
+        read_all = len(assets) > self._read_all_threshold
         return _read_bcolz_data(
             self._table,
             (end_idx - start_idx + 1, len(assets)),
@@ -552,6 +554,7 @@ class BcolzDailyBarReader(DailyBarReader):
             first_rows,
             last_rows,
             offsets,
+            read_all,
         )
 
     def _spot_col(self, colname):
