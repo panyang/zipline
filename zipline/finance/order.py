@@ -41,7 +41,7 @@ class Order(object):
     # to cut down on the memory footprint of this object.
     __slots__ = ["id", "dt", "reason", "created", "sid", "amount", "filled",
                  "commission", "_status", "stop", "limit", "stop_reached",
-                 "limit_reached", "direction", "type"]
+                 "limit_reached", "direction", "type", "broker_order_id"]
 
     def __init__(self, dt, sid, amount, stop=None, limit=None, filled=0,
                  commission=None, id=None):
